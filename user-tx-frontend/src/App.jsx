@@ -17,7 +17,6 @@ export default function App() {
       <header className="bg-white shadow">
         <div className="container mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between">
           <div className="flex items-center gap-3 mb-2 sm:mb-0">
-            <img src="src/assets/logo.png" alt="Logo" className="w-12 h-12" />
             <h1 className="text-2xl font-bold text-blue-600">
               User & Transaction Dashboard
             </h1>
