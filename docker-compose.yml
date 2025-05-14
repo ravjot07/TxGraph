@@ -1,0 +1,39 @@
+services:
+  neo4j:
+    image: neo4j:5.7.0
+    container_name: neo4j
+    environment:
+      NEO4J_AUTH: "${NEO4J_USER}/${NEO4J_PASS}"
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j-data:/data
+    restart: on-failure
+
+  backend:
+    build:
+      context: ./user-tx-backend
+      dockerfile: Dockerfile
+    container_name: user-tx-backend
+    env_file:
+      - .env
+    ports:
+      - "${PORT}:${PORT}"
+    depends_on:
+      - neo4j
+    restart: on-failure
+
+  frontend:
+    build:
+      context: ./user-tx-frontend
+      dockerfile: Dockerfile
+    container_name: user-tx-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: on-failure
+
+volumes:
+  neo4j-data:

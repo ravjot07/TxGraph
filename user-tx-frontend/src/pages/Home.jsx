@@ -12,7 +12,6 @@ const FEATURES = [
 export default function Home() {
   return (
     <div className="container mx-auto px-6 py-12">
-      {/* Hero */}
       <div className="text-center mb-12">
         <h1 className="text-4xl font-extrabold text-gray-800 mb-4">
           User &amp; Transaction Dashboard
@@ -22,7 +21,6 @@ export default function Home() {
         </p>
       </div>
 
-      {/* Feature Cards */}
       <section className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mb-12">
         {FEATURES.map(({ title, to, color }) => (
           <Link to={to} key={title}>
@@ -45,7 +43,6 @@ export default function Home() {
         ))}
       </section>
 
-      {/* Quick-Action Buttons (optional extra emphasis) */}
       <section className="flex flex-wrap justify-center gap-4">
         <Link
           to="/add-user"
@@ -64,7 +61,6 @@ export default function Home() {
   )
 }
 
-// Helper to give each card a bit of context
 function descriptionFor(title) {
   switch (title) {
     case 'Add a User':

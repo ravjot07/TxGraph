@@ -5,7 +5,6 @@ export default function Lists() {
   const [users, setUsers]               = useState([])
   const [txns,  setTxns]                = useState([])
 
-  // Filters
   const [userQuery, setUserQuery]       = useState('')
   const [minAmt, setMinAmt]             = useState('')
   const [maxAmt, setMaxAmt]             = useState('')
@@ -15,7 +14,6 @@ export default function Lists() {
   const [descQuery, setDescQuery]       = useState('')
   const [deviceQuery, setDeviceQuery]   = useState('')
 
-  // Pagination
   const USERS_PER_PAGE = 5
   const TXNS_PER_PAGE  = 5
   const [userPage, setUserPage] = useState(1)
@@ -26,7 +24,6 @@ export default function Lists() {
     axios.get('/api/transactions').then(res => setTxns(res.data))
   }, [])
 
-  // Filter logic
   const filteredUsers = users.filter(u => {
     const q = userQuery.toLowerCase()
     return (
@@ -50,7 +47,6 @@ export default function Lists() {
 
   const currencies = Array.from(new Set(txns.map(t => t.currency))).sort()
 
-  // Pagination slices
   const userPageCount = Math.ceil(filteredUsers.length / USERS_PER_PAGE)
   const txnPageCount  = Math.ceil(filteredTxns.length  / TXNS_PER_PAGE)
   const displayUsers  = filteredUsers.slice((userPage-1)*USERS_PER_PAGE, userPage*USERS_PER_PAGE)
@@ -58,7 +54,6 @@ export default function Lists() {
 
   return (
     <div className="container mx-auto px-6 py-12 space-y-12">
-      {/* Users Section */}
       <section className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-semibold mb-4">Users</h2>
         <input
@@ -97,7 +92,6 @@ export default function Lists() {
             </tbody>
           </table>
         </div>
-        {/* User Pagination */}
         {userPageCount > 1 && (
           <div className="flex justify-center items-center mt-4 space-x-2">
             <button
@@ -129,7 +123,6 @@ export default function Lists() {
         )}
       </section>
 
-      {/* Transactions Section */}
       <section className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-semibold mb-4">Transactions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
@@ -208,7 +201,6 @@ export default function Lists() {
           </table>
         </div>
 
-        {/* Transaction Pagination */}
         {txnPageCount > 1 && (
           <div className="flex justify-center items-center mt-4 space-x-2">
             <button

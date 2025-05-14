@@ -13,7 +13,6 @@ const NAV_ITEMS = [
 export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow">
         <div className="container mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between">
           <h1 className="text-2xl font-bold text-blue-600 mb-2 sm:mb-0">
@@ -40,12 +39,10 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="flex-1 container mx-auto px-6 py-8">
         <Outlet />
       </main>
 
-      {/* Footer */}
       <footer className="bg-white border-t">
         <div className="container mx-auto px-6 py-4 text-center text-sm text-gray-500">
            Flagright Intern Assignment
