@@ -70,25 +70,22 @@ type TransactionRelationships struct {
 }
 
 type PathNode struct {
-    ID   int64  `json:"id"`
-    Type string `json:"type"`           
-    Name string `json:"name,omitempty"` 
+    ID       int64  `json:"id"`
+    Type     string `json:"type"`           
+    Name     string `json:"name,omitempty"` 
+    DeviceID string `json:"deviceId,omitempty"`
 }
 
-// ShortestPathResponse wraps the sequence of path nodes.
+// represent each hop in the response
+type PathSegment struct {
+    From         PathNode `json:"from"`
+    To           PathNode `json:"to"`
+    Relationship string   `json:"relationship"`
+}
+
+// response wrapper
 type ShortestPathResponse struct {
-    Path []PathNode `json:"path"`
-}
-
-// TransactionCluster represents a single transaction’s cluster assignment.
-type TransactionCluster struct {
-    TransactionID int64 `json:"transactionId"`
-    ClusterID     int64 `json:"clusterId"`
-}
-
-// TransactionClustersResponse wraps all cluster assignments.
-type TransactionClustersResponse struct {
-    Clusters []TransactionCluster `json:"clusters"`
+    Segments []PathSegment `json:"segments"`
 }
 
 // GraphNode represents any node (User or Transaction) for export.
@@ -111,4 +108,15 @@ type GraphRelationship struct {
 type GraphExportResponse struct {
     Nodes         []GraphNode         `json:"nodes"`
     Relationships []GraphRelationship `json:"relationships"`
+}
+
+// TransactionCluster represents a single transaction’s cluster assignment.
+type TransactionCluster struct {
+    TransactionID int64 `json:"transactionId"`
+    ClusterID     int64 `json:"clusterId"`
+}
+
+// TransactionClustersResponse wraps all cluster assignments.
+type TransactionClustersResponse struct {
+    Clusters []TransactionCluster `json:"clusters"`
 }

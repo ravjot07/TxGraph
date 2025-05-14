@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom'
 
 const FEATURES = [
-  { title: 'Add a User',       to: '/add-user',       color: 'bg-green-500' },
-  { title: 'Add a Transaction', to: '/add-transaction', color: 'bg-blue-500' },
-  { title: 'View Lists',       to: '/lists',          color: 'bg-indigo-500' },
-  { title: 'Graph View',       to: '/graph',          color: 'bg-purple-500' },
-  { title: 'Shortest Path',    to: '/analytics',      color: 'bg-teal-500' },
-  { title: 'Export JSON/CSV',  to: '/export',         color: 'bg-gray-700' },
+  { title: 'Add a User',            to: '/add-user',            color: 'bg-green-500' },
+  { title: 'Add a Transaction',      to: '/add-transaction',     color: 'bg-blue-500' },
+  { title: 'View Lists',             to: '/lists',               color: 'bg-indigo-500' },
+  { title: 'Graph View',             to: '/graph',               color: 'bg-purple-500' },
+  { title: 'Shortest Path',          to: '/analytics',           color: 'bg-teal-500' },
+  { title: 'Transaction Clusters',   to: '/transaction-clusters',color: 'bg-red-500' },
+  { title: 'Export JSON/CSV',        to: '/export',              color: 'bg-gray-700' },
 ]
 
 export default function Home() {
@@ -42,21 +43,6 @@ export default function Home() {
           </Link>
         ))}
       </section>
-
-      <section className="flex flex-wrap justify-center gap-4">
-        <Link
-          to="/add-user"
-          className="px-6 py-3 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition-colors"
-        >
-          + New User
-        </Link>
-        <Link
-          to="/add-transaction"
-          className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition-colors"
-        >
-          + New Transaction
-        </Link>
-      </section>
     </div>
   )
 }
@@ -73,6 +59,8 @@ function descriptionFor(title) {
       return 'See relationships laid out in an interactive network.'
     case 'Shortest Path':
       return 'Find connection chains between any two users.'
+    case 'Transaction Clusters':
+      return 'Group transactions by shared users into clusters.'
     case 'Export JSON/CSV':
       return 'Download the full graph for offline analysis.'
     default:

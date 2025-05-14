@@ -10,6 +10,7 @@ export default function Analytics() {
   const cyRef                 = useRef(null)
   const [cy, setCy]           = useState(null)
 
+  // 1) initialize Cytoscape
   useEffect(() => {
     if (cyRef.current && !cy) {
       const instance = cytoscape({
@@ -36,12 +37,15 @@ export default function Analytics() {
               'text-background-padding': '2px',
               'line-color': '#555',
               width: 2,
+              'target-arrow-shape': 'triangle',
+              'target-arrow-color': '#555',
             },
           },
           {
             selector: '.highlight',
             style: {
               'line-color': 'red',
+              'target-arrow-color': 'red',
               width: 4,
             },
           },
@@ -52,20 +56,18 @@ export default function Analytics() {
     }
   }, [cyRef, cy])
 
+  // 2) load user list for the selectors
   useEffect(() => {
     axios
       .get('/api/users')
       .then(res => setUsers(res.data))
-      .catch(err => {
-        console.error('Failed to load users:', err)
-        setError('Error loading user list.')
-      })
+      .catch(() => setError('Error loading user list.'))
   }, [])
 
+  // 3) form submit: fetch path‐with‐relations and draw graph
   const handlePath = async e => {
     e.preventDefault()
     setError(null)
-
     if (!fromID || !toID) {
       setError('Please select both users.')
       return
@@ -75,44 +77,55 @@ export default function Analytics() {
       const { data } = await axios.get(
         `/api/analytics/shortest-path/users/${fromID}/${toID}`
       )
-      const path = data.path
+      const segments = data.segments // expect [{ from, to, relationship }, ...]
 
-      if (!path || path.length === 0) {
+      if (!segments?.length) {
         setError('No path found between those users.')
         cy.elements().remove()
         return
       }
 
-      const nodeElems = path.map(n => {
-        const prefix = n.type[0].toLowerCase()
-        const id     = `${prefix}${n.id}`
-        const label  = n.type === 'User' ? n.name : `Txn #${n.id}`
-        return { data: { id, label } }
-      })
-
-      const edgeElems = []
-      for (let i = 1; i < path.length; i++) {
-        const prev = path[i - 1]
-        const curr = path[i]
-        const pid  = `${prev.type[0].toLowerCase()}${prev.id}`
-        const cid  = `${curr.type[0].toLowerCase()}${curr.id}`
-        edgeElems.push({
-          data: { id: `e_${pid}_${cid}`, source: pid, target: cid, label: 'path' },
-          classes: 'highlight',
+      // build node elements (deduplicated)
+      const nodeMap = {}
+      segments.forEach(({ from, to }) => {
+        ;[from, to].forEach(n => {
+          const key = `${n.type[0].toLowerCase()}${n.id}`
+          if (!nodeMap[key]) {
+            nodeMap[key] = {
+              data: {
+                id: key,
+                label:
+                  n.type === 'User'
+                    ? n.name
+                    : `Txn #${n.id}${n.deviceId ? ` (${n.deviceId})` : ''}`,
+              },
+            }
+          }
         })
-      }
+      })
+      const nodeElems = Object.values(nodeMap)
+
+      // build edge elements using the real relationship name
+      const edgeElems = segments.map(({ from, to, relationship }, i) => {
+        const src = `${from.type[0].toLowerCase()}${from.id}`
+        const dst = `${to.type[0].toLowerCase()}${to.id}`
+        return {
+          data: {
+            id: `e_${src}_${dst}_${i}`,
+            source: src,
+            target: dst,
+            label: relationship.replace('_', ' '),
+          },
+          classes: 'highlight',
+        }
+      })
 
       cy.elements().remove()
       cy.add([...nodeElems, ...edgeElems])
       cy.layout({ name: 'breadthfirst' }).run()
       cy.fit()
-    } catch (err) {
-      console.error('Analytics error:', err)
-      setError(
-        err.response?.data === 'no path found\n'
-          ? 'No path found between those users.'
-          : 'Error computing path.'
-      )
+    } catch {
+      setError('Error computing path.')
       cy.elements().remove()
     }
   }

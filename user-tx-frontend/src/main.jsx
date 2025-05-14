@@ -10,6 +10,7 @@ import Lists from './pages/Lists'
 import GraphView from './pages/GraphView'
 import Analytics from './pages/Analytics'
 import ExportPage from './pages/Export'
+import TransactionClusters from './pages/TransactionClusters'
 import './index.css'
 
 
@@ -23,6 +24,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="lists"                  element={<Lists />} />
         <Route path="graph"                  element={<GraphView />} />
         <Route path="analytics"              element={<Analytics />} />
+        <Route path="transaction-clusters"   element={<TransactionClusters />} />
         <Route path="export"                 element={<ExportPage />} />
       </Route>
     </Routes>

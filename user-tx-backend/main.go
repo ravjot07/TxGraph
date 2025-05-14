@@ -60,6 +60,7 @@ func main() {
     router.HandleFunc("/api/analytics/shortest-path/users/{from}/{to}", h.GetUserShortestPath).Methods("GET")
     router.HandleFunc("/api/export/json", h.ExportGraphJSON).Methods("GET")
     router.HandleFunc("/api/export/csv",  h.ExportGraphCSV).Methods("GET")
+	router.HandleFunc("/api/analytics/transaction-clusters", h.GetTransactionClusters).Methods("GET")
     
    
 	addr := ":" + port

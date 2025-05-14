@@ -4,6 +4,7 @@ import (
     "context"
     "errors"
     "time"
+    "fmt"
 
     "github.com/neo4j/neo4j-go-driver/v5/neo4j"
     "user-tx-backend/models"
@@ -13,7 +14,6 @@ type Driver struct {
     drv neo4j.DriverWithContext
 }
 
-// NewDriver creates a new Neo4j driver and verifies connectivity.
 func NewDriver(uri, username, password string) (*Driver, error) {
     drv, err := neo4j.NewDriverWithContext(uri,
         neo4j.BasicAuth(username, password, ""),
@@ -33,13 +33,12 @@ func (d *Driver) Close() {
     _ = d.drv.Close(context.Background())
 }
 
-// CreateUser inserts a User node (no IP) and returns its internal Neo4j ID.
 func (d *Driver) CreateUser(name, email, phone string) (int64, error) {
     ctx := context.Background()
     session := d.drv.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
     defer session.Close(ctx)
 
-    raw, err := session.ExecuteWrite(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+    rawID, err := session.ExecuteWrite(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
         rec, err := tx.Run(ctx,
             `CREATE (u:User { name: $name, email: $email, phone: $phone })
              RETURN id(u)`,
@@ -51,13 +50,40 @@ func (d *Driver) CreateUser(name, email, phone string) (int64, error) {
         if rec.Next(ctx) {
             return rec.Record().Values[0].(int64), nil
         }
-        return nil, errors.New("no record returned")
+        return nil, fmt.Errorf("CreateUser: no record returned")
     })
     if err != nil {
         return 0, err
     }
-    return raw.(int64), nil
+    newID := rawID.(int64)
+
+    if _, err := session.ExecuteWrite(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+        _, err := tx.Run(ctx,
+            `MATCH (u:User), (o:User)
+             WHERE id(u) = $id AND o.email = u.email AND id(o) <> $id
+             MERGE (u)-[:SHARED_EMAIL]-(o)`,
+            map[string]any{"id": newID},
+        )
+        return nil, err
+    }); err != nil {
+        return newID, fmt.Errorf("CreateUser: failed to link SHARED_EMAIL: %w", err)
+    }
+
+    if _, err := session.ExecuteWrite(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+        _, err := tx.Run(ctx,
+            `MATCH (u:User), (o:User)
+             WHERE id(u) = $id AND o.phone = u.phone AND id(o) <> $id
+             MERGE (u)-[:SHARED_PHONE]-(o)`,
+            map[string]any{"id": newID},
+        )
+        return nil, err
+    }); err != nil {
+        return newID, fmt.Errorf("CreateUser: failed to link SHARED_PHONE: %w", err)
+    }
+
+    return newID, nil
 }
+
 
 // GetAllUsers retrieves all users (no IP in results).
 func (d *Driver) GetAllUsers() ([]models.User, error) {
@@ -96,22 +122,22 @@ func (d *Driver) GetAllUsers() ([]models.User, error) {
 func (d *Driver) CreateTransaction(
     fromID, toID int64,
     amount float64,
-    currency, timestamp, description, deviceID string,
+    currency, timestamp, description, deviceId string,
 ) (int64, error) {
     ctx := context.Background()
     session := d.drv.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
     defer session.Close(ctx)
 
-    raw, err := session.ExecuteWrite(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+    rawID, err := session.ExecuteWrite(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
         rec, err := tx.Run(ctx,
             `MATCH (u1:User),(u2:User)
-             WHERE id(u1)=$fromId AND id(u2)=$toId
+             WHERE id(u1) = $fromId AND id(u2) = $toId
              CREATE (t:Transaction {
                amount:      $amt,
                currency:    $currency,
                timestamp:   datetime($ts),
                description: $desc,
-               `+"`deviceId`"+`:    $dev
+               deviceId:    $deviceId
              })
              CREATE (u1)-[:SENT]->(t)
              CREATE (t)-[:RECEIVED_BY]->(u2)
@@ -123,7 +149,7 @@ func (d *Driver) CreateTransaction(
                 "currency": currency,
                 "ts":       timestamp,
                 "desc":     description,
-                "dev":      deviceID,
+                "deviceId": deviceId,
             },
         )
         if err != nil {
@@ -132,14 +158,29 @@ func (d *Driver) CreateTransaction(
         if rec.Next(ctx) {
             return rec.Record().Values[0].(int64), nil
         }
-        return nil, errors.New("no record returned")
+        return nil, fmt.Errorf("CreateTransaction: no record returned")
     })
     if err != nil {
         return 0, err
     }
-    return raw.(int64), nil
-}
+    newID := rawID.(int64)
 
+    if _, err := session.ExecuteWrite(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+        _, err := tx.Run(ctx,
+            `MATCH (t:Transaction),(o:Transaction)
+             WHERE id(t) = $id
+               AND o.deviceId = t.deviceId
+               AND id(o) <> $id
+             MERGE (t)-[:SHARED_DEVICE]-(o)`,
+            map[string]any{"id": newID},
+        )
+        return nil, err
+    }); err != nil {
+        return newID, fmt.Errorf("CreateTransaction: failed to link SHARED_DEVICE: %w", err)
+    }
+
+    return newID, nil
+}
 // GetAllTransactions retrieves every transaction, including from/to IDs and deviceId.
 func (d *Driver) GetAllTransactions() ([]models.Transaction, error) {
     ctx := context.Background()
@@ -502,52 +543,177 @@ func SeedData(d *Driver) error {
     return nil
 }
 
-// ShortestPathUsers finds the shortest path between two users (nodes of any type).
-func (d *Driver) ShortestPathUsers(
+func (d *Driver) ShortestPathSegments(
     fromID, toID int64,
-) ([]models.PathNode, error) {
+) ([]models.PathSegment, error) {
     ctx := context.Background()
     session := d.drv.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
     defer session.Close(ctx)
 
     raw, err := session.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
-        result, err := tx.Run(ctx, 
-            `MATCH (a:User),(b:User),
-                   p = shortestPath((a)-[*]-(b))
-             WHERE id(a)=$from AND id(b)=$to
-             UNWIND nodes(p) AS n
-             RETURN labels(n)[0] AS lbl,
-                    id(n)          AS id,
-                    CASE WHEN n:User THEN n.name ELSE '' END AS name`,
+        result, err := tx.Run(ctx,
+            `MATCH (a:User),(b:User), p = shortestPath((a)-[*]-(b))
+             WHERE id(a) = $from AND id(b) = $to
+             UNWIND relationships(p) AS r
+             WITH r, startNode(r) AS fn, endNode(r) AS tn
+             RETURN
+               labels(fn)[0]                                        AS fromLabel,
+               id(fn)                                               AS fromId,
+               CASE WHEN fn:User THEN fn.name ELSE '' END           AS fromName,
+               CASE WHEN fn:Transaction THEN fn.deviceId ELSE '' END AS fromDeviceId,
+
+               labels(tn)[0]                                        AS toLabel,
+               id(tn)                                               AS toId,
+               CASE WHEN tn:User THEN tn.name ELSE '' END           AS toName,
+               CASE WHEN tn:Transaction THEN tn.deviceId ELSE '' END AS toDeviceId,
+
+               type(r)                                              AS relationship`,
             map[string]any{"from": fromID, "to": toID},
-        )        
+        )
         if err != nil {
             return nil, err
         }
-        var path []models.PathNode
+
+        var segments []models.PathSegment
         for result.Next(ctx) {
-            r := result.Record()
-            path = append(path, models.PathNode{
-                Type: r.Values[0].(string),
-                ID:   r.Values[1].(int64),
-                Name: r.Values[2].(string), // empty for Transaction
+            rec := result.Record()
+
+            from := models.PathNode{
+                Type:     rec.Values[0].(string),
+                ID:       rec.Values[1].(int64),
+                Name:     rec.Values[2].(string),
+                DeviceID: rec.Values[3].(string),
+            }
+            to := models.PathNode{
+                Type:     rec.Values[4].(string),
+                ID:       rec.Values[5].(int64),
+                Name:     rec.Values[6].(string),
+                DeviceID: rec.Values[7].(string),
+            }
+            rel := rec.Values[8].(string)
+
+            segments = append(segments, models.PathSegment{
+                From:         from,
+                To:           to,
+                Relationship: rel,
             })
         }
         if err := result.Err(); err != nil {
             return nil, err
         }
-        if len(path) == 0 {
+        if len(segments) == 0 {
             return nil, errors.New("no path found")
         }
-        return path, nil
+        return segments, nil
     })
     if err != nil {
         return nil, err
     }
-    return raw.([]models.PathNode), nil
+    return raw.([]models.PathSegment), nil
 }
 
+func (d *Driver) ClusterTransactions() ([]models.TransactionCluster, error) {
+    ctx := context.Background()
+    session := d.drv.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
+    defer session.Close(ctx)
 
+    // 1) Load all transaction IDs
+    rawTx, err := session.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+        rs, err := tx.Run(ctx, `MATCH (t:Transaction) RETURN id(t)`, nil)
+        if err != nil {
+            return nil, err
+        }
+        var ids []int64
+        for rs.Next(ctx) {
+            ids = append(ids, rs.Record().Values[0].(int64))
+        }
+        return ids, rs.Err()
+    })
+    if err != nil {
+        return nil, err
+    }
+    txIDs := rawTx.([]int64)
+
+    // 2) Load every transaction–transaction edge via a shared user
+    rawPairs, err := session.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+        rs, err := tx.Run(ctx, `
+            MATCH (t1:Transaction)-[:SENT|RECEIVED_BY]-(u:User)-[:SENT|RECEIVED_BY]-(t2:Transaction)
+            WHERE id(t1)<id(t2)
+            RETURN id(t1), id(t2)
+        `, nil)
+        if err != nil {
+            return nil, err
+        }
+        var pairs [][2]int64
+        for rs.Next(ctx) {
+            rec := rs.Record()
+            pairs = append(pairs, [2]int64{
+                rec.Values[0].(int64),
+                rec.Values[1].(int64),
+            })
+        }
+        return pairs, rs.Err()
+    })
+    if err != nil {
+        return nil, err
+    }
+    transactionPairs := rawPairs.([][2]int64)
+
+    // 3) Build adjacency list
+    adj := make(map[int64][]int64, len(txIDs))
+    for _, id := range txIDs {
+        adj[id] = []int64{}
+    }
+    for _, p := range transactionPairs {
+        t1, t2 := p[0], p[1]
+        adj[t1] = append(adj[t1], t2)
+        adj[t2] = append(adj[t2], t1)
+    }
+
+    // 4) BFS to find connected components
+    visited := make(map[int64]bool, len(txIDs))
+    var clusters []models.TransactionCluster
+
+    for _, start := range txIDs {
+        if visited[start] {
+            continue
+        }
+        // collect this component
+        queue := []int64{start}
+        visited[start] = true
+        comp := []int64{start}
+
+        for len(queue) > 0 {
+            curr := queue[0]
+            queue = queue[1:]
+            for _, nei := range adj[curr] {
+                if !visited[nei] {
+                    visited[nei] = true
+                    queue = append(queue, nei)
+                    comp = append(comp, nei)
+                }
+            }
+        }
+
+        // determine cluster ID = smallest transaction ID in comp
+        minID := comp[0]
+        for _, tid := range comp[1:] {
+            if tid < minID {
+                minID = tid
+            }
+        }
+
+        // emit one entry per transaction in this component
+        for _, tid := range comp {
+            clusters = append(clusters, models.TransactionCluster{
+                TransactionID: tid,
+                ClusterID:     minID,
+            })
+        }
+    }
+
+    return clusters, nil
+}
 // ExportGraph pulls every node and relationship for export.
 func (d *Driver) ExportGraph() (models.GraphExportResponse, error) {
     ctx := context.Background()
