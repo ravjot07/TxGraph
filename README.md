@@ -48,15 +48,24 @@ A web application for managing users and transactions with Neo4j graph relations
 
 Create a `.env` file in the `user-tx-backend/` directory:
 
-```ini
+### For local setup
+
+```
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASS=password123
+SEED_DATA=true
+PORT=8080
+```
+### For Docker setup
+
+```
 NEO4J_URI=bolt://neo4j:7687
 NEO4J_USER=neo4j
 NEO4J_PASS=your_password
 SEED_DATA=true
 PORT=8080
 ```
-
-
 ## Local Setup
 
 ### Backend
